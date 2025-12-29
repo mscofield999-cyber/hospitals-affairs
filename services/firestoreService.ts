@@ -12,22 +12,31 @@ import {
   orderBy,
   Timestamp,
 } from 'firebase/firestore';
-import { db } from './firebase';
-import { AppSettings, Meeting, MeetingDepartment } from '../types';
+import { db, authReady } from './firebase';
+import { AppSettings, Department, Meeting, MeetingDepartment } from '../types';
 
 // Collection names
 const COLLECTIONS = {
   DEPARTMENTS: 'departments',
   SETTINGS: 'settings',
-  MEETINGS: 'meetings'
+  MEETINGS: 'meetings',
+  DASHBOARD_DEPARTMENTS: 'dashboard_departments'
 };
 
 // Firestore service class
 export class FirestoreService {
+  private static async ensureAuth(): Promise<void> {
+    try {
+      await authReady;
+    } catch {
+      return;
+    }
+  }
   
   // Departments
   static async getDepartments(): Promise<(MeetingDepartment & { id: string })[]> {
     try {
+      await this.ensureAuth();
       const q = query(collection(db, COLLECTIONS.DEPARTMENTS), orderBy('name'));
       const querySnapshot = await getDocs(q);
       return querySnapshot.docs.map(doc => ({
@@ -42,6 +51,7 @@ export class FirestoreService {
 
   static async addDepartment(department: Omit<MeetingDepartment, 'id'>): Promise<string> {
     try {
+      await this.ensureAuth();
       const docRef = await addDoc(collection(db, COLLECTIONS.DEPARTMENTS), {
         ...department,
         createdAt: Timestamp.now(),
@@ -56,6 +66,7 @@ export class FirestoreService {
 
   static async updateDepartment(id: string, updates: Partial<MeetingDepartment>): Promise<void> {
     try {
+      await this.ensureAuth();
       await updateDoc(doc(db, COLLECTIONS.DEPARTMENTS, id), {
         ...updates,
         updatedAt: Timestamp.now()
@@ -68,6 +79,7 @@ export class FirestoreService {
 
   static async deleteDepartment(id: string): Promise<void> {
     try {
+      await this.ensureAuth();
       await deleteDoc(doc(db, COLLECTIONS.DEPARTMENTS, id));
     } catch (error) {
       console.error('Error deleting department:', error);
@@ -88,13 +100,14 @@ export class FirestoreService {
   }
 
   // Settings
-  static async getSettings(userId: string = 'default'): Promise<(AppSettings & { id: string }) | null> {
+  static async getSettings(userId: string = 'default'): Promise<AppSettings | null> {
     try {
+      await this.ensureAuth();
       const settingsRef = doc(db, COLLECTIONS.SETTINGS, userId);
       const docSnap = await getDoc(settingsRef);
       
       if (docSnap.exists()) {
-        return { id: docSnap.id, ...docSnap.data() } as (AppSettings & { id: string });
+        return docSnap.data() as AppSettings;
       }
       return null;
     } catch (error) {
@@ -105,6 +118,7 @@ export class FirestoreService {
 
   static async saveSettings(settings: AppSettings, userId: string = 'default'): Promise<void> {
     try {
+      await this.ensureAuth();
       const settingsRef = doc(db, COLLECTIONS.SETTINGS, userId);
       const existing = await getDoc(settingsRef);
       const createdAt = existing.exists() ? (existing.data() as any).createdAt ?? Timestamp.now() : Timestamp.now();
@@ -125,12 +139,12 @@ export class FirestoreService {
     }
   }
 
-  static subscribeToSettings(userId: string = 'default', callback: (settings: (AppSettings & { id: string }) | null) => void): () => void {
+  static subscribeToSettings(userId: string = 'default', callback: (settings: AppSettings | null) => void): () => void {
     const settingsRef = doc(db, COLLECTIONS.SETTINGS, userId);
     
     return onSnapshot(settingsRef, (docSnap) => {
       if (docSnap.exists()) {
-        callback({ id: docSnap.id, ...docSnap.data() } as (AppSettings & { id: string }));
+        callback(docSnap.data() as AppSettings);
       } else {
         callback(null);
       }
@@ -140,6 +154,7 @@ export class FirestoreService {
   // Meetings
   static async saveMeeting(meetingData: Meeting): Promise<string> {
     try {
+      await this.ensureAuth();
       const docRef = await addDoc(collection(db, COLLECTIONS.MEETINGS), {
         ...meetingData,
         createdAt: Timestamp.now(),
@@ -154,6 +169,7 @@ export class FirestoreService {
 
   static async getMeetings(): Promise<(Meeting & { id: string })[]> {
     try {
+      await this.ensureAuth();
       const q = query(collection(db, COLLECTIONS.MEETINGS), orderBy('createdAt', 'desc'));
       const querySnapshot = await getDocs(q);
       return querySnapshot.docs.map(doc => ({
@@ -192,11 +208,54 @@ export class FirestoreService {
   // Check Firestore connection
   static async checkConnection(): Promise<boolean> {
     try {
+      await this.ensureAuth();
       await getDocs(collection(db, COLLECTIONS.SETTINGS));
       return true;
     } catch (error) {
       console.warn('Firestore connection check failed:', error);
       return false;
+    }
+  }
+
+  static async getDashboardDepartments(): Promise<Department[]> {
+    try {
+      await this.ensureAuth();
+      const q = query(collection(db, COLLECTIONS.DASHBOARD_DEPARTMENTS), orderBy('name'));
+      const querySnapshot = await getDocs(q);
+      return querySnapshot.docs.map(d => ({
+        id: d.id,
+        ...(d.data() as Omit<Department, 'id'>)
+      })) as Department[];
+    } catch (error) {
+      console.error('Error getting dashboard departments:', error);
+      throw error;
+    }
+  }
+
+  static async upsertDashboardDepartment(department: Department): Promise<void> {
+    try {
+      await this.ensureAuth();
+      await setDoc(
+        doc(db, COLLECTIONS.DASHBOARD_DEPARTMENTS, department.id),
+        {
+          ...department,
+          updatedAt: Timestamp.now()
+        },
+        { merge: true }
+      );
+    } catch (error) {
+      console.error('Error upserting dashboard department:', error);
+      throw error;
+    }
+  }
+
+  static async deleteDashboardDepartment(id: string): Promise<void> {
+    try {
+      await this.ensureAuth();
+      await deleteDoc(doc(db, COLLECTIONS.DASHBOARD_DEPARTMENTS, id));
+    } catch (error) {
+      console.error('Error deleting dashboard department:', error);
+      throw error;
     }
   }
 }

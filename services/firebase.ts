@@ -3,6 +3,7 @@
 import { initializeApp } from "firebase/app";
 import { getAnalytics } from "firebase/analytics";
 import { getFirestore, enableIndexedDbPersistence } from "firebase/firestore";
+import { getAuth, onAuthStateChanged, signInAnonymously } from "firebase/auth";
 
 // Your web app's Firebase configuration
 const firebaseConfig = {
@@ -21,6 +22,18 @@ let analytics = null;
 
 // Initialize Firestore with offline persistence
 const db = getFirestore(app);
+
+const auth = getAuth(app);
+const authReady: Promise<unknown> = new Promise((resolve) => {
+  const unsubscribe = onAuthStateChanged(auth, (user) => {
+    if (user) {
+      unsubscribe();
+      resolve(user);
+    }
+  });
+});
+
+signInAnonymously(auth).catch(() => {});
 
 // Enable offline persistence
 enableIndexedDbPersistence(db).then(() => {
@@ -43,4 +56,4 @@ try {
   console.warn("Firebase Analytics failed to initialize:", e);
 }
 
-export { app, analytics, db };
+export { app, analytics, db, auth, authReady };

@@ -1,5 +1,6 @@
 import { FirestoreService } from './firestoreService';
 import { db } from './db';
+import { Department } from '../types';
 
 interface HybridStorageService {
   // Departments
@@ -8,6 +9,11 @@ interface HybridStorageService {
   updateDepartment(id: string, updates: any): Promise<void>;
   deleteDepartment(id: string): Promise<void>;
   subscribeToDepartments(callback: (departments: any[]) => void): () => void;
+
+  // Dashboard Departments
+  getDashboardDepartments(): Promise<Department[]>;
+  upsertDashboardDepartment(department: Department): Promise<void>;
+  deleteDashboardDepartment(id: string): Promise<void>;
 
   // Settings
   getSettings(): Promise<any>;
@@ -26,6 +32,7 @@ interface HybridStorageService {
 class HybridStorageServiceImpl implements HybridStorageService {
   private useFirestore: boolean = true;
   private firestoreAvailable: boolean = false;
+  private dashboardDepartmentsCacheKey = 'mahder.dashboard_departments.v1';
 
   constructor() {
     this.initialize();
@@ -51,6 +58,25 @@ class HybridStorageServiceImpl implements HybridStorageService {
 
   async isOnline(): Promise<boolean> {
     return this.firestoreAvailable && this.useFirestore;
+  }
+
+  private readLocalDashboardDepartments(): Department[] {
+    try {
+      const raw = localStorage.getItem(this.dashboardDepartmentsCacheKey);
+      if (!raw) return [];
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? (parsed as Department[]) : [];
+    } catch {
+      return [];
+    }
+  }
+
+  private writeLocalDashboardDepartments(departments: Department[]): void {
+    try {
+      localStorage.setItem(this.dashboardDepartmentsCacheKey, JSON.stringify(departments));
+    } catch {
+      return;
+    }
   }
 
   // Departments
@@ -141,6 +167,53 @@ class HybridStorageServiceImpl implements HybridStorageService {
       checkForChanges();
       
       return () => clearInterval(interval);
+    }
+  }
+
+  // Dashboard Departments
+  async getDashboardDepartments(): Promise<Department[]> {
+    try {
+      if (this.useFirestore) {
+        const departments = await FirestoreService.getDashboardDepartments();
+        this.writeLocalDashboardDepartments(departments);
+        return departments;
+      }
+      return this.readLocalDashboardDepartments();
+    } catch (error) {
+      console.warn('Failed to get dashboard departments from Firestore, falling back to local:', error);
+      this.useFirestore = false;
+      return this.readLocalDashboardDepartments();
+    }
+  }
+
+  async upsertDashboardDepartment(department: Department): Promise<void> {
+    const local = this.readLocalDashboardDepartments();
+    const next = local.some(d => d.id === department.id)
+      ? local.map(d => (d.id === department.id ? department : d))
+      : [...local, department];
+    this.writeLocalDashboardDepartments(next);
+
+    try {
+      if (this.useFirestore) {
+        await FirestoreService.upsertDashboardDepartment(department);
+      }
+    } catch (error) {
+      console.warn('Failed to upsert dashboard department to Firestore, keeping local:', error);
+      this.useFirestore = false;
+    }
+  }
+
+  async deleteDashboardDepartment(id: string): Promise<void> {
+    const local = this.readLocalDashboardDepartments();
+    this.writeLocalDashboardDepartments(local.filter(d => d.id !== id));
+
+    try {
+      if (this.useFirestore) {
+        await FirestoreService.deleteDashboardDepartment(id);
+      }
+    } catch (error) {
+      console.warn('Failed to delete dashboard department from Firestore, keeping local:', error);
+      this.useFirestore = false;
     }
   }
 

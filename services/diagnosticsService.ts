@@ -1,7 +1,8 @@
 
 import { db } from './db';
 import { checkGeminiConnection } from './geminiService';
-import { analytics } from './firebase';
+import { analytics, auth } from './firebase';
+import { FirestoreService } from './firestoreService';
 
 export interface DiagnosticResult {
   id: string;
@@ -74,6 +75,32 @@ export const runSystemDiagnostics = async (): Promise<DiagnosticResult[]> => {
     status: analytics ? 'ok' : 'warning',
     message: analytics ? 'تم التهيئة بنجاح' : 'لم يتم التفعيل أو حدث خطأ في التهيئة'
   });
+
+  // 6. Firebase Auth
+  results.push({
+    id: 'firebaseAuth',
+    name: 'مصادقة Firebase',
+    status: auth.currentUser ? 'ok' : 'warning',
+    message: auth.currentUser ? 'مفعل (مستخدم مجهول)' : 'غير مفعل بعد'
+  });
+
+  // 7. Firestore Cloud Storage
+  try {
+    const dashboardDepartments = await FirestoreService.getDashboardDepartments();
+    results.push({
+      id: 'firestore',
+      name: 'تخزين السحابة (Firestore)',
+      status: 'ok',
+      message: `متصل (${dashboardDepartments.length} إدارات)`
+    });
+  } catch (e: any) {
+    results.push({
+      id: 'firestore',
+      name: 'تخزين السحابة (Firestore)',
+      status: 'error',
+      message: e?.code ? `${e.code}: ${e.message}` : `فشل الاتصال: ${e?.message ?? 'غير معروف'}`
+    });
+  }
 
   return results;
 };

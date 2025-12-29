@@ -133,6 +133,23 @@ const App: React.FC = () => {
     loadSettings();
   }, [refreshKey]);
 
+  useEffect(() => {
+    const loadDepartments = async () => {
+      try {
+        const saved = await hybridStorageService.getDashboardDepartments();
+        if (saved.length > 0) {
+          setDepartments(saved);
+          return;
+        }
+        setDepartments(INITIAL_DEPARTMENTS);
+        await Promise.all(INITIAL_DEPARTMENTS.map((d) => hybridStorageService.upsertDashboardDepartment(d)));
+      } catch (e) {
+        console.error("Failed to load departments", e);
+      }
+    };
+    loadDepartments();
+  }, []);
+
   // Apply Global Theme and CSS Variables
   useEffect(() => {
     const root = document.documentElement;
@@ -188,11 +205,13 @@ const App: React.FC = () => {
     setDepartments(prevDepts => 
       prevDepts.map(d => d.id === updatedDept.id ? updatedDept : d)
     );
+    hybridStorageService.upsertDashboardDepartment(updatedDept);
   };
 
   const handleDeleteDepartment = (id: string) => {
     if (confirm('هل أنت متأكد من حذف هذا القسم وجميع بياناته (المهام، الزيارات، المؤشرات)؟ هذا الإجراء لا يمكن التراجع عنه.')) {
       setDepartments(prev => prev.filter(d => d.id !== id));
+      hybridStorageService.deleteDashboardDepartment(id);
     }
   };
 
@@ -208,6 +227,7 @@ const App: React.FC = () => {
         icon: 'briefcase'
     };
     setDepartments(prev => [...prev, newDept]);
+    hybridStorageService.upsertDashboardDepartment(newDept);
   };
 
   const triggerNewMeeting = () => {
