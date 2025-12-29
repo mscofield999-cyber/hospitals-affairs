@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { ai, createPcmBlob, decodeAudioData } from '../services/geminiService';
 import { LiveServerMessage, Modality } from '@google/genai';
-import { Mic, MicOff, Volume2, Waveform } from 'lucide-react';
+import { Mic, MicOff, Volume2 } from 'lucide-react';
 
 const VoiceAssistant: React.FC = () => {
   const [isConnected, setIsConnected] = useState(false);

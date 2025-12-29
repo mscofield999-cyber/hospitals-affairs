@@ -35,7 +35,8 @@ enableIndexedDbPersistence(db).then(() => {
 
 // Only initialize analytics in production environment
 try {
-  if (import.meta.env.PROD) {
+  const isProd = !!(import.meta as any).env?.PROD;
+  if (isProd) {
     analytics = getAnalytics(app);
   }
 } catch (e) {

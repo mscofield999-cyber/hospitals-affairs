@@ -3,6 +3,7 @@ import {
   doc, 
   addDoc, 
   updateDoc, 
+  setDoc,
   deleteDoc, 
   getDocs, 
   getDoc, 
@@ -10,9 +11,9 @@ import {
   query,
   orderBy,
   Timestamp,
-  DocumentData
 } from 'firebase/firestore';
 import { db } from './firebase';
+import { AppSettings, Meeting, MeetingDepartment } from '../types';
 
 // Collection names
 const COLLECTIONS = {
@@ -21,49 +22,25 @@ const COLLECTIONS = {
   MEETINGS: 'meetings'
 };
 
-// Department interface
-interface Department {
-  id?: string;
-  name: string;
-  description: string;
-  tasks: string[];
-  kpis: string[];
-  challenges: string[];
-  createdAt?: Date;
-  updatedAt?: Date;
-}
-
-// Settings interface
-interface AppSettings {
-  id?: string;
-  theme: 'light' | 'dark' | 'auto';
-  language: 'ar' | 'en';
-  fontSize: number;
-  notifications: boolean;
-  userId?: string;
-  createdAt?: Date;
-  updatedAt?: Date;
-}
-
 // Firestore service class
 export class FirestoreService {
   
   // Departments
-  static async getDepartments(): Promise<Department[]> {
+  static async getDepartments(): Promise<(MeetingDepartment & { id: string })[]> {
     try {
       const q = query(collection(db, COLLECTIONS.DEPARTMENTS), orderBy('name'));
       const querySnapshot = await getDocs(q);
       return querySnapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
-      })) as Department[];
+      })) as (MeetingDepartment & { id: string })[];
     } catch (error) {
       console.error('Error getting departments:', error);
       throw error;
     }
   }
 
-  static async addDepartment(department: Omit<Department, 'id'>): Promise<string> {
+  static async addDepartment(department: Omit<MeetingDepartment, 'id'>): Promise<string> {
     try {
       const docRef = await addDoc(collection(db, COLLECTIONS.DEPARTMENTS), {
         ...department,
@@ -77,7 +54,7 @@ export class FirestoreService {
     }
   }
 
-  static async updateDepartment(id: string, updates: Partial<Department>): Promise<void> {
+  static async updateDepartment(id: string, updates: Partial<MeetingDepartment>): Promise<void> {
     try {
       await updateDoc(doc(db, COLLECTIONS.DEPARTMENTS, id), {
         ...updates,
@@ -98,26 +75,26 @@ export class FirestoreService {
     }
   }
 
-  static subscribeToDepartments(callback: (departments: Department[]) => void): () => void {
+  static subscribeToDepartments(callback: (departments: (MeetingDepartment & { id: string })[]) => void): () => void {
     const q = query(collection(db, COLLECTIONS.DEPARTMENTS), orderBy('name'));
     
     return onSnapshot(q, (querySnapshot) => {
       const departments = querySnapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
-      })) as Department[];
+      })) as (MeetingDepartment & { id: string })[];
       callback(departments);
     });
   }
 
   // Settings
-  static async getSettings(userId: string = 'default'): Promise<AppSettings | null> {
+  static async getSettings(userId: string = 'default'): Promise<(AppSettings & { id: string }) | null> {
     try {
       const settingsRef = doc(db, COLLECTIONS.SETTINGS, userId);
       const docSnap = await getDoc(settingsRef);
       
       if (docSnap.exists()) {
-        return { id: docSnap.id, ...docSnap.data() } as AppSettings;
+        return { id: docSnap.id, ...docSnap.data() } as (AppSettings & { id: string });
       }
       return null;
     } catch (error) {
@@ -126,46 +103,34 @@ export class FirestoreService {
     }
   }
 
-  static async saveSettings(settings: Omit<AppSettings, 'id'>, userId: string = 'default'): Promise<void> {
+  static async saveSettings(settings: AppSettings, userId: string = 'default'): Promise<void> {
     try {
       const settingsRef = doc(db, COLLECTIONS.SETTINGS, userId);
-      await updateDoc(settingsRef, {
-        ...settings,
-        userId,
-        updatedAt: Timestamp.now()
-      });
-    } catch (error) {
-      // If document doesn't exist, create it
-      if (error.code === 'not-found') {
-        await this.createSettings(settings, userId);
-      } else {
-        console.error('Error saving settings:', error);
-        throw error;
-      }
-    }
-  }
+      const existing = await getDoc(settingsRef);
+      const createdAt = existing.exists() ? (existing.data() as any).createdAt ?? Timestamp.now() : Timestamp.now();
 
-  private static async createSettings(settings: Omit<AppSettings, 'id'>, userId: string = 'default'): Promise<void> {
-    try {
-      const settingsRef = doc(db, COLLECTIONS.SETTINGS, userId);
-      await updateDoc(settingsRef, {
-        ...settings,
-        userId,
-        createdAt: Timestamp.now(),
-        updatedAt: Timestamp.now()
-      });
+      await setDoc(
+        settingsRef,
+        {
+          ...settings,
+          userId,
+          createdAt,
+          updatedAt: Timestamp.now()
+        },
+        { merge: true }
+      );
     } catch (error) {
-      console.error('Error creating settings:', error);
+      console.error('Error saving settings:', error);
       throw error;
     }
   }
 
-  static subscribeToSettings(userId: string = 'default', callback: (settings: AppSettings | null) => void): () => void {
+  static subscribeToSettings(userId: string = 'default', callback: (settings: (AppSettings & { id: string }) | null) => void): () => void {
     const settingsRef = doc(db, COLLECTIONS.SETTINGS, userId);
     
     return onSnapshot(settingsRef, (docSnap) => {
       if (docSnap.exists()) {
-        callback({ id: docSnap.id, ...docSnap.data() } as AppSettings);
+        callback({ id: docSnap.id, ...docSnap.data() } as (AppSettings & { id: string }));
       } else {
         callback(null);
       }
@@ -173,7 +138,7 @@ export class FirestoreService {
   }
 
   // Meetings
-  static async saveMeeting(meetingData: any): Promise<string> {
+  static async saveMeeting(meetingData: Meeting): Promise<string> {
     try {
       const docRef = await addDoc(collection(db, COLLECTIONS.MEETINGS), {
         ...meetingData,
@@ -187,14 +152,14 @@ export class FirestoreService {
     }
   }
 
-  static async getMeetings(): Promise<any[]> {
+  static async getMeetings(): Promise<(Meeting & { id: string })[]> {
     try {
       const q = query(collection(db, COLLECTIONS.MEETINGS), orderBy('createdAt', 'desc'));
       const querySnapshot = await getDocs(q);
       return querySnapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
-      }));
+      })) as (Meeting & { id: string })[];
     } catch (error) {
       console.error('Error getting meetings:', error);
       throw error;
