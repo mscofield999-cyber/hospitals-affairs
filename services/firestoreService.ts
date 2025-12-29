@@ -12,7 +12,8 @@ import {
   orderBy,
   Timestamp,
 } from 'firebase/firestore';
-import { db, authReady } from './firebase';
+import { db, authReady, auth } from './firebase';
+import { signInAnonymously } from 'firebase/auth';
 import { AppSettings, Department, Meeting, MeetingDepartment } from '../types';
 
 // Collection names
@@ -28,8 +29,17 @@ export class FirestoreService {
   private static async ensureAuth(): Promise<void> {
     try {
       await authReady;
-    } catch {
-      return;
+      if (!auth.currentUser) {
+        await signInAnonymously(auth);
+      }
+    } catch (error) {
+      console.warn('Auth check failed, attempting re-signin:', error);
+      try {
+        await signInAnonymously(auth);
+      } catch (retryError) {
+        console.error('Auth re-signin failed:', retryError);
+        throw retryError;
+      }
     }
   }
   
