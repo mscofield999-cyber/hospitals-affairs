@@ -1,0 +1,7 @@
+{
+  "name": "Hospital Affairs Dashboard",
+  "description": "A comprehensive tracking dashboard for Hospital Affairs & Care Delivery departments, featuring infographic views, KPI tracking, and AI-powered meeting documentation.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
