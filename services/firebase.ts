@@ -2,6 +2,7 @@
 // Import the functions you need from the SDKs you need
 import { initializeApp } from "firebase/app";
 import { getAnalytics } from "firebase/analytics";
+import { getFirestore, enableIndexedDbPersistence } from "firebase/firestore";
 
 // Your web app's Firebase configuration
 const firebaseConfig = {
@@ -18,6 +19,20 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 let analytics = null;
 
+// Initialize Firestore with offline persistence
+const db = getFirestore(app);
+
+// Enable offline persistence
+enableIndexedDbPersistence(db).then(() => {
+  console.log("Firestore offline persistence enabled");
+}).catch((e) => {
+  if (e.code === 'failed-precondition') {
+    console.warn("Multiple tabs open, persistence can only be enabled in one tab at a time.");
+  } else if (e.code === 'unimplemented') {
+    console.warn("The current browser doesn't support offline persistence.");
+  }
+});
+
 // Only initialize analytics in production environment
 try {
   if (import.meta.env.PROD) {
@@ -27,4 +42,4 @@ try {
   console.warn("Firebase Analytics failed to initialize:", e);
 }
 
-export { app, analytics };
+export { app, analytics, db };

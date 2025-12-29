@@ -5,6 +5,7 @@ import DepartmentCard from './components/DepartmentCard';
 import MeetingTools from './components/MeetingTools';
 import SettingsPage from './components/SettingsPage';
 import { db } from './services/db';
+import { hybridStorageService } from './services/hybridStorageService';
 import { 
   LayoutDashboard, FileText, Menu, Settings, 
   PlusCircle, Activity, ChevronLeft, X, LogOut, Plus 
@@ -117,13 +118,13 @@ const App: React.FC = () => {
   });
   const [refreshKey, setRefreshKey] = useState(0);
 
-  // Load Settings from DB
+  // Load Settings from Hybrid Storage (Firestore + IndexedDB)
   useEffect(() => {
     const loadSettings = async () => {
       try {
-        const saved = await db.settings.toArray();
-        if (saved.length > 0) {
-          setAppSettings(saved[0]);
+        const saved = await hybridStorageService.getSettings();
+        if (saved) {
+          setAppSettings(saved);
         }
       } catch (e) {
         console.error("Failed to load settings", e);

@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { db } from '../services/db';
+import { hybridStorageService } from '../services/hybridStorageService';
 import { AppSettings, MeetingDepartment, Hospital, MeetingLocation, SubDepartment } from '../types';
 import { runSystemDiagnostics, DiagnosticResult } from '../services/diagnosticsService';
 import { 
@@ -234,18 +235,8 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ onSettingsChanged }) => {
     try {
       const currentSettings = { ...settings };
       
-      // Verify ID integrity
-      if (currentSettings.id) {
-        const exists = await db.settings.get(currentSettings.id);
-        if (exists) {
-           await db.settings.update(currentSettings.id, currentSettings);
-        } else {
-           const { id, ...rest } = currentSettings;
-           await db.settings.add(rest as AppSettings);
-        }
-      } else {
-        await db.settings.add(currentSettings);
-      }
+      // Save using hybrid storage service (Firestore + IndexedDB)
+      await hybridStorageService.saveSettings(currentSettings);
 
       if (onSettingsChanged) onSettingsChanged(); 
       alert(t.save_success);
